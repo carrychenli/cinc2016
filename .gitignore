@@ -127,3 +127,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+*.h5
+*.pkl
+*.zip
+*.png
+*.jpg
+
+
+sample2016/
+sample2016b/
+training/
+validation/
