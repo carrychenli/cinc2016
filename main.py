@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from pandas.plotting import register_matplotlib_converters
-from pcg_model import PCG, PCGONLY
+from pcg_model import creat_pcg_model
 import tensorflow as tf
 
 register_matplotlib_converters()
@@ -27,28 +27,40 @@ plt.rcParams['font.family'] = 'FangSong'
 plt.rcParams['axes.unicode_minus'] = False
 
 import h5py
+from datetime import datetime
+
+
+def train_model(dim=1, x=None, y=None):
+    print('Go model' + str(dim) + 'D!')
+
+    log_dir = "logs\\model" + str(dim) + "D\\tsbd\\" + datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    # 在文件名中包含 epoch (使用 `str.format`)
+    checkpoint_path = "logs\\model" + str(dim) + "D\\ckpt\\" + "cp-{epoch:04d}.ckpt"
+    # 创建一个回调，每 5 个 epochs 保存模型的权重
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path, verbose=1, save_weights_only=True, period=5)
+
+    model = creat_pcg_model(dim, k[dim - 1])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.fit(x=x, y=y, batch_size=batch_size[dim - 1], epochs=epochs[dim - 1],
+              shuffle=True, validation_split=0.1, verbose=2, callbacks=[tensorboard_callback, cp_callback])
+    model.summary()
+    model.evaluate(x=x, y=y, batch_size=batch_size[dim - 1])
+
 
 if __name__ == '__main__':
-    with h5py.File('cincset.h5', 'r') as h5f:
+    epochs = np.array([1, 1, 1]) * 2
+    batch_size = [128, 128, 64]
+    k = [1, 1, 1]
+    with h5py.File('cincset1.h5', 'r') as h5f:
         xs = h5f['x']
         specs = h5f['spectrogram']
         # labels = h5f['label2d']
         labels = h5f['label1d']
+        print(labels[:].shape)
+        print(np.sum(labels[:]))
 
-        print('go1, model1D')
-        model1D = PCGONLY(dim=1)
-        model1D.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        model1D.fit(x=xs[:], y=labels[:], batch_size=64, epochs=1)
-        y1 = model1D.predict(x=xs[0:2])
-
-        print('go2, model2D')
-        model2D = PCGONLY(dim=2)
-        model2D.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        model2D.fit(x=specs[:], y=labels[:], batch_size=64, epochs=1)
-        y2 = model2D.predict(x=specs[0:2])
-
-        print('go3, model')
-        model = PCG()
-        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-        model.fit(x=(xs[:], specs[:]), y=labels[:], batch_size=64, epochs=1)
-        y3 = model.predict(x=(xs[0:2], specs[0:2]))
+        train_model(dim=1, x=xs[:], y=labels[:])
+        train_model(dim=2, x=specs[:], y=labels[:])
+        train_model(dim=3, x=(xs[:], specs[:]), y=labels[:])

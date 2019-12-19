@@ -21,6 +21,7 @@ from matplotlib import pyplot as plt
 import wave
 from sklearn import preprocessing
 import h5py
+import pickle
 
 
 def read_wav(wav_file):
@@ -69,7 +70,7 @@ def get_random_pos(frame_cumsum):
     for pos in range(length):
         if rd <= frame_cumsum[pos]:
             return pos
-    return length
+    return 0
 
 
 def get_cumsum(frames, index):
@@ -82,8 +83,7 @@ def get_cumsum(frames, index):
 
 
 def get_spectrogram(xs):
-    # local_window, local_sliding, nfft = 800, 385,256  # 配齐128
-    local_window, local_sliding = 200, 77  # 配齐128
+    local_window, local_sliding = 200, 77  # 配齐 128 * 128
     length = (window - local_window) // local_sliding + 1
     # print(length)
     spectrogram = np.zeros(shape=(length, length))
@@ -102,7 +102,7 @@ def prepare_train_data():
     pos_frame_cumsum = get_cumsum(frames, pos_index)
     neg_frame_cumsum = get_cumsum(frames, neg_index)
     try:
-        h5f = h5py.File('cincset.h5', 'w-')
+        h5f = h5py.File(h5fn, 'w-')
         x_set = h5f.create_dataset("x", shape=(target_num, window, 1),
                                    maxshape=(None, window, 1), chunks=(128, window, 1))
         spec_set = h5f.create_dataset("spectrogram", shape=(target_num, nfft // 2, nfft // 2, 1),
@@ -112,7 +112,7 @@ def prepare_train_data():
         label_set2d = h5f.create_dataset("label2d", shape=(target_num, 2), maxshape=(None, 2), chunks=(128, 2))
         i0 = 0
     except:
-        h5f = h5py.File('cincset.h5', 'a')
+        h5f = h5py.File(h5fn, 'a')
         x_set = h5f['x']
         spec_set = h5f['spectrogram']
         label_set1d = h5f['label1d']
@@ -122,7 +122,6 @@ def prepare_train_data():
         spec_set.resize([target_num + i0, nfft // 2, nfft // 2, 1])
         label_set1d.resize([target_num + i0, ])
         label_set2d.resize([target_num + i0, 2])
-        # h5py.Dataset
 
     for i in range(target_num):
         if np.random.rand() <= 0.5:  # 抽取一个pos
@@ -167,37 +166,74 @@ def validation_data_cut(data):
 
 def prepare_validation_data(func):
     datas, labels, _ = func()
-    x_val = []
+    x_val, spec_val = [], []
     for data in datas:
         x = validation_data_cut(data)
+        spec = get_spectrogram(x[0])
+        specs = np.zeros(shape=(x.shape[0], spec.shape[0], spec.shape[1]))
+        specs[0] = spec
+        for i in range(x.shape[0] - 1):
+            specs[i + 1] = get_spectrogram(x[i + 1])
         x_val.append(x)
-    return x_val, labels
+        spec_val.append(specs)
+    return x_val, spec_val, labels
 
-
-import pickle
 
 framerate = 2000
 window = framerate * 5
-target_num = int(1e3)
+target_num = int(8e5)
 nfft = 256
+h5fn = 'cincset.h5'
 
 if __name__ == '__main__':
-    prepare_train_data()  # 10000,128*128*1
+    prepare_train_data()
 
-    # x_train, y_train = prepare_train_data(read_one_folder)
-    # d1 = {'x_train': x_train, 'y_train': y_train}
-    # with open('val.pkl', 'wb') as f1:
-    #     pickle.dump(d1, f1)
+    """"
+    以下 for val
+    """
+    # h5py write
+    if False:
+        x_val, spec_val, y_val = prepare_validation_data(read_one_folder)
+        x_train_for_val, spec_train_for_val, y_train_for_val = prepare_validation_data(read_train)
+        lenval = len(y_val)
+        lentrain = len(y_train_for_val)
+        with h5py.File('val.h5', 'w') as h5f:
+            x_val_set = h5f.create_dataset("x_val", shape=(lenval,))
+            spec_val_set = h5f.create_dataset("spec_val", shape=(lenval,))
+            y_val_set = h5f.create_dataset("y_val", shape=(lenval,))
+            x_train_for_val_set = h5f.create_dataset("x_train_for_val", shape=(lentrain,))
+            spec_train_for_val_set = h5f.create_dataset("spec_train_for_val", shape=(lentrain,))
+            y_train_for_val_set = h5f.create_dataset("y_train_for_val", shape=(lentrain,))
+            x_val_set[:] = x_val
+            spec_val_set[:] = spec_val
+            y_val_set[:] = y_val
+            x_train_for_val_set[:] = x_train_for_val
+            spec_train_for_val_set[:] = spec_train_for_val
+            y_train_for_val_set[:] = y_train_for_val
 
-    # x_val, y_val = prepare_validation_data(read_one_folder)
-    # x_train_for_val, y_train_for_val = prepare_validation_data(read_train)
-    # d2 = {'x_train_for_val': x_train_for_val,
-    #       'y_train_for_val': y_train_for_val,
-    #       'x_val': x_val, 'y_val': y_val}
-    # with open('val.pkl', 'wb') as f2:
-    #     pickle.dump(d2, f2)
+    # h5py read
+    if False:
+        with h5py.File('val.h5', 'r') as h5f:
+            x_val = h5f['x_val']
+            spec_val = h5f['spec_val']
+            y_val = h5f['y_val']
+            x_train_for_val = h5f['x_train_for_val']
+            spec_train_for_val = h5f['spec_train_for_val']
+            y_train_for_val = h5f['y_train_for_val']
 
-    # with open('val.pkl', 'rb') as f2:
-    #     d2 = pickle.load(f2)
-    #     x_train_for_val, y_train_for_val, x_val, y_val = \
-    #         d2['x_train_for_val'], d2['y_train_for_val'], d2['x_val'], d2['y_val']
+    # pickle write
+    if False:
+        d = {'x_train_for_val': x_train_for_val,
+             'spec_train_for_val': spec_train_for_val,
+             'y_train_for_val': y_train_for_val,
+             'x_val': x_val, 'spec_val': spec_val, 'y_val': y_val}
+        with open('val.pkl', 'wb') as f:
+            pickle.dump(d, f)
+
+    # pickle read
+    if False:
+        with open('val.pkl', 'rb') as f:
+            d = pickle.load(f)
+            x_train_for_val, spec_train_for_val, y_train_for_val, x_val, spec_val, y_val = \
+                d['x_train_for_val'], d['spec_train_for_val'], d['y_train_for_val'], \
+                d['x_val'], d['spec_val'], d['y_val']
