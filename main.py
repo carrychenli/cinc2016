@@ -22,45 +22,213 @@ from pandas.plotting import register_matplotlib_converters
 from pcg_model import creat_pcg_model
 import tensorflow as tf
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 register_matplotlib_converters()
 plt.rcParams['font.family'] = 'FangSong'
 plt.rcParams['axes.unicode_minus'] = False
 
 import h5py
+import pickle
 from datetime import datetime
 
 
-def train_model(dim=1, x=None, y=None):
-    print('Go model' + str(dim) + 'D!')
+def generate_train_dataset(x, lens, batch=32):
+    bg, ed = 0, batch
+    while ed < lens * 0.9:
+        data = x[bg:ed]
+        bg = ed
+        ed += batch
+        yield data
+
+
+def generate_val_dataset(x, lens, batch=32):
+    bg = int(lens * 0.9)
+    ed = bg + batch
+    while ed < lens:
+        data = x[bg:ed]
+        bg = ed
+        ed += batch
+        yield data
+
+
+def train_model_h5py_generate(dim=1, x=None, y=None):
+    print('Go to train model' + str(dim) + 'D!')
 
     log_dir = "logs\\model" + str(dim) + "D\\tsbd\\" + datetime.now().strftime("%Y%m%d-%H%M%S")
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    tsbd_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     # 在文件名中包含 epoch (使用 `str.format`)
     checkpoint_path = "logs\\model" + str(dim) + "D\\ckpt\\" + "cp-{epoch:04d}.ckpt"
     # 创建一个回调，每 5 个 epochs 保存模型的权重
-    cp_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path, verbose=1, save_weights_only=True, period=5)
+    ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path, verbose=1, save_weights_only=True, period=1)
+    model = creat_pcg_model(dim, k[dim - 1])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+    y_train_set = tf.data.Dataset.from_generator(generator=generate_train_dataset(y, y.shape[0], batch_size[dim - 1]),
+                                                 output_types=tf.int64)
+    y_val_set = tf.data.Dataset.from_generator(generator=generate_val_dataset(y, y.shape[0], batch_size[dim - 1]))
+    if dim in [1, 2]:
+        x_train_set = tf.data.Dataset.from_generator(
+            generator=generate_train_dataset(x, y.shape[0], batch_size[dim - 1]))
+        x_val_set = tf.data.Dataset.from_generator(
+            generator=generate_train_dataset(x, y.shape[0], batch_size[dim - 1]))
+    else:
+        x_train_set = (
+            tf.data.Dataset.from_generator(generator=generate_train_dataset(x[0], y.shape[0], batch_size[dim - 1])),
+            tf.data.Dataset.from_generator(generator=generate_train_dataset(x[1], y.shape[0], batch_size[dim - 1])))
+        x_val_set = (
+            tf.data.Dataset.from_generator(generator=generate_val_dataset(x[0], y.shape[0], batch_size[dim - 1])),
+            tf.data.Dataset.from_generator(generator=generate_val_dataset(x[1], y.shape[0], batch_size[dim - 1])))
+
+    model.fit(x_train_set, y_train_set, epochs=1, shuffle=True, validation_data=(x_val_set, y_val_set), verbose=2,
+              callbacks=[tsbd_callback, ckpt_callback])
+
+    model.summary()
+    # model.save("logs\\model" + str(dim) + "D.h5", save_format='tf')
+    return None
+
+
+def train_model(dim=1, x=None, y=None):
+    print('Go to train model' + str(dim) + 'D!')
+
+    log_dir = "logs\\model" + str(dim) + "D\\tsbd\\" + datetime.now().strftime("%Y%m%d-%H%M%S")
+    tsbd_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    # 在文件名中包含 epoch (使用 `str.format`)
+    checkpoint_path = "logs\\model" + str(dim) + "D\\ckpt\\" + "cp-{epoch:04d}.ckpt"
+    # 创建一个回调，每 5 个 epochs 保存模型的权重
+    ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path, verbose=1, save_weights_only=True, period=1)
 
     model = creat_pcg_model(dim, k[dim - 1])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     model.fit(x=x, y=y, batch_size=batch_size[dim - 1], epochs=epochs[dim - 1],
-              shuffle=True, validation_split=0.1, verbose=2, callbacks=[tensorboard_callback, cp_callback])
+              shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
     model.summary()
     model.evaluate(x=x, y=y, batch_size=batch_size[dim - 1])
+    # model.save("logs\\model" + str(dim) + "D.h5", save_format='tf')
+    return None
 
 
+def train_model_h5py(dim=1, x=None, y=None):
+    print('Go to train model' + str(dim) + 'D!')
+
+    log_dir = "logs\\model" + str(dim) + "D\\tsbd\\" + datetime.now().strftime("%Y%m%d-%H%M%S")
+    tsbd_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+    # 在文件名中包含 epoch (使用 `str.format`)
+    checkpoint_path = "logs\\model" + str(dim) + "D\\ckpt\\" + "cp-{epoch:04d}.ckpt"
+    # 创建一个回调，每 5 个 epochs 保存模型的权重
+    ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_path, verbose=1, save_weights_only=True, period=1)
+    model = creat_pcg_model(dim, k[dim - 1])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    bg, ed = 0, 1280
+    for i in range(epochs[dim - 1]):
+        while ed < y.shape[0]:
+            if dim in [1, 2]:
+                model.fit(x=x[bg:ed], y=y[bg:ed], batch_size=batch_size[dim - 1], epochs=1,
+                          shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
+            else:
+                model.fit(x=(x[0][bg:ed], x[1][bg:ed]), y=y[bg:ed], batch_size=batch_size[dim - 1], epochs=1,
+                          shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
+            bg = ed
+            ed += 1280
+    model.summary()
+    # model.save("logs\\model" + str(dim) + "D.h5", save_format='tf')
+    return None
+
+
+def predict_one_sample_step2(probs):
+    return int(np.mean(probs > 0.5) > 0.5)
+
+
+def eval_model(dim=1, x=None, y=None):
+    print('Go to evaluate model' + str(dim) + 'D!')
+    y = y.astype(np.int)
+    predicts = np.zeros_like(y, dtype=np.int)
+
+    model = creat_pcg_model(dim, k[dim - 1])
+    latest = tf.train.latest_checkpoint("logs\\model" + str(dim) + "D\\ckpt")
+    model.load_weights(latest)
+    #### model = tf.keras.models.load_model("logs\\model" + str(dim) + "D.h5")
+    for i in range(y.shape[0]):
+        xi = x[i] if dim in [1, 2] else (x[0][i], x[1][i])
+        prob = model.predict(xi)
+        predicts[i] = predict_one_sample_step2(prob)
+    accuracy = np.mean(predicts == y) * 100
+    pos_num = int(np.sum(predicts == 1))
+    neg_num = int(np.sum(predicts == 0))
+    true_num = int(np.sum(y == 1))
+    false_num = int(np.sum(y == 0))
+    false_pos = np.sum((y == 0) * (predicts == 1)) / false_num * 100
+    false_neg = np.sum((y == 1) * (predicts == 0)) / true_num * 100
+    precision = np.sum((y == 1) * (predicts == 1)) / pos_num * 100
+    recall = np.sum((y == 1) * (predicts == 1)) / true_num * 100
+    F1score = 2 * precision * recall / (precision + recall) / 100
+    print(str(dim) + 'D模型：')
+    print('总样本%d个，正例%d个，负例%d个。\n识别出阳例%d个，阴例%d个。\n正确率%0.1f%%，假阳率%0.1f%%，假阴率%0.1f%%。' % (
+        y.shape[0], true_num, false_num, pos_num, neg_num, accuracy, false_pos, false_neg))
+    print('精确度%0.1f%%，召回率%0.1f%%，F1 score: %0.3f' % (precision, recall, F1score))
+    with open(str(dim) + 'D模型.txt', 'w') as f1:
+        f1.write('总样本%d个，正例%d个，负例%d个。\n识别出阳例%d个，阴例%d个。\n正确率%0.1f%%，假阳率%0.1f%%，假阴率%0.1f%%。' % (
+            y.shape[0], true_num, false_num, pos_num, neg_num, accuracy, false_pos, false_neg))
+        f1.write('精确度%0.1f%%，召回率%0.1f%%，F1 score: %0.3f' % (precision, recall, F1score))
+    plt.plot(y, label='y')
+    plt.plot(predicts, label='predicts')
+    plt.legend()
+    plt.show()
+    return None
+
+
+epochs = np.array([1, 1, 1]) * 5
+batch_size = [128, 128, 64]
+k = [1, 1, 1]
+
+# train h5py
 if __name__ == '__main__':
-    epochs = np.array([1, 1, 1]) * 2
-    batch_size = [128, 128, 64]
-    k = [1, 1, 1]
+    with h5py.File('cincset.h5', 'r') as h5f:
+        xs = h5f['x']
+        specs = h5f['spectrogram']
+        labels = h5f['label1d']  # labels = h5f['label2d']
+        #
+        train_model_h5py_generate(dim=1, x=xs, y=labels)
+        # train_model_h5py_generate(dim=2, x=specs, y=labels)
+        # train_model_h5py_generate(dim=3, x=(xs, specs), y=labels)
+
+# train
+if __name__ == '__main__A':
     with h5py.File('cincset1.h5', 'r') as h5f:
         xs = h5f['x']
         specs = h5f['spectrogram']
-        # labels = h5f['label2d']
-        labels = h5f['label1d']
-        print(labels[:].shape)
-        print(np.sum(labels[:]))
+        labels = h5f['label1d']  # labels = h5f['label2d']
+        # print(labels[:].shape)
+        # print(np.sum(labels[:]))
+        #
+        # train_model(dim=1, x=xs[:], y=labels[:])
+        # train_model(dim=2, x=specs[:], y=labels[:])
+        # train_model(dim=3, x=(xs[:], specs[:]), y=labels[:])
 
-        train_model(dim=1, x=xs[:], y=labels[:])
-        train_model(dim=2, x=specs[:], y=labels[:])
-        train_model(dim=3, x=(xs[:], specs[:]), y=labels[:])
+# evaluate
+if __name__ == '__main__':
+    with open('val.pkl', 'rb') as f:
+        d = pickle.load(f)
+        x_train_for_val, spec_train_for_val, y_train_for_val, x_val, spec_val, y_val = \
+            d['x_train_for_val'], d['spec_train_for_val'], d['y_train_for_val'], \
+            d['x_val'], d['spec_val'], d['y_val']
+        print('x_val shape', len(x_val))
+        print('spec_val shape', len(spec_val))
+        print('x_val[0] shape', x_val[0].shape)
+        print('spec_val[0] shape', spec_val[0].shape)
+        eval_model(dim=1, x=x_val, y=y_val)
+        eval_model(dim=2, x=spec_val, y=y_val)
+        # eval_model(dim=3, x=(x_val, spec_val), y=y_val)
+
+    # with h5py.File('val.h5', 'r') as h5f:
+    #     x_val = h5f['x_val']
+    #     spec_val = h5f['spec_val']
+    #     y_val = h5f['y_val']
+    #     x_train_for_val = h5f['x_train_for_val']
+    #     spec_train_for_val = h5f['spec_train_for_val']
+    #     y_train_for_val = h5f['y_train_for_val']
+    #     eval_model(dim=1, x=x_val[:], y=y_val[:])
+    #     eval_model(dim=2, x=spec_val[:], y=y_val[:])
+    #     eval_model(dim=3, x=(x_val[:], spec_val[:]), y=y_val[:])

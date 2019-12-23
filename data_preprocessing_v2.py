@@ -35,6 +35,8 @@ def read_wav(wav_file):
 def read_one_folder(folder='validation'):
     files = list_all_files(folder, '.wav')
     label = pd.read_csv(folder + '\\REFERENCE.csv', header=None)[1].to_numpy()
+    label[label < 0] = 0
+    label = label.astype(np.int)
     frame = np.zeros_like(label)
     data = []
     for fid, wav_file in enumerate(files):
@@ -98,7 +100,7 @@ def get_spectrogram(xs):
 @func_timer
 def prepare_train_data():
     datas, labels, frames = read_train()
-    pos_index, neg_index = np.where(labels > 0)[0], np.where(labels < 0)[0]
+    pos_index, neg_index = np.where(labels == 1)[0], np.where(labels == 0)[0]
     pos_frame_cumsum = get_cumsum(frames, pos_index)
     neg_frame_cumsum = get_cumsum(frames, neg_index)
     try:
@@ -164,6 +166,7 @@ def validation_data_cut(data):
     return x
 
 
+@func_timer
 def prepare_validation_data(func):
     datas, labels, _ = func()
     x_val, spec_val = [], []
@@ -174,8 +177,8 @@ def prepare_validation_data(func):
         specs[0] = spec
         for i in range(x.shape[0] - 1):
             specs[i + 1] = get_spectrogram(x[i + 1])
-        x_val.append(x)
-        spec_val.append(specs)
+        x_val.append(x[:, :, np.newaxis])
+        spec_val.append(specs[:, :, :, np.newaxis])
     return x_val, spec_val, labels
 
 
@@ -186,7 +189,7 @@ nfft = 256
 h5fn = 'cincset.h5'
 
 if __name__ == '__main__':
-    prepare_train_data()
+    # prepare_train_data()
 
     """"
     以下 for val
@@ -222,7 +225,9 @@ if __name__ == '__main__':
             y_train_for_val = h5f['y_train_for_val']
 
     # pickle write
-    if False:
+    if True:
+        x_val, spec_val, y_val = prepare_validation_data(read_one_folder)
+        x_train_for_val, spec_train_for_val, y_train_for_val = prepare_validation_data(read_train)
         d = {'x_train_for_val': x_train_for_val,
              'spec_train_for_val': spec_train_for_val,
              'y_train_for_val': y_train_for_val,
