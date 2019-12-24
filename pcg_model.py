@@ -221,30 +221,18 @@ class InceptionResnetV2(tf.keras.layers.Layer):
         self.flat = tf.keras.layers.Flatten()
 
     def call(self, inputs, training=None, mask=None):  # 128*128*1 for 2D  # 10000*1 for 1D
-        # print('我勒个去0', inputs.shape)
         x = self.stem(inputs, training=training)  # 16*16*24k for 2D  # 156*24k for 1D
-        # print('我勒个去A', x.shape)
         x = self.inception_resnet_a1(x, training=training)  # 16*16*24k for 2D  # 156*24k for 1D
-        # print('我勒个去B', x.shape)
         x = self.reduction_a1(x, training=training)  # 8*8*24k for 2D, # 78*24k for 1D
-        # print('我勒个去C', x.shape)
         if self.dim == 1:
             x = self.reduction_a1_more(x, training=training)  # 39*24k for 1D
-            # print('我勒个去D', x.shape)
         x = self.inception_resnet_a2(x, training=training)  # 8*8*24k for 2D, 39*24k for 1D
-        # print('我勒个去E', x.shape)
         x = self.reduction_a2(x, training=training)  # 4*4*24k for 2D, # 20*24k for 1D
-        # print('我勒个去F', x.shape)
         if self.dim == 1:
             x = self.reduction_a2_more(x, training=training)  # 10*24k for 1D
-            # print('我勒个去G', x.shape)
         x = self.avgpool(x)  # 1*1*24k for 2D, # 1*24k 1D
-        # print('我勒个去H', x.shape)
         x = self.dropout(x, training=training)  # 1*1*24k for 2D, # 1*24k 1D
-        # print('我勒个去I', x.shape)
         x = self.flat(x)  # 24k for 2D or 1D
-        # print('我勒个去J', x.shape)
-        # exit()
         return x
 
 

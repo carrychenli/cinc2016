@@ -184,18 +184,18 @@ def prepare_validation_data(func):
 
 framerate = 2000
 window = framerate * 5
-target_num = int(8e5)
+target_num = int(1e6-1e4)
 nfft = 256
 h5fn = 'cincset.h5'
 
 if __name__ == '__main__':
-    # prepare_train_data()
+    prepare_train_data()
 
     """"
     以下 for val
     """
     # h5py write
-    if False:
+    if True:
         x_val, spec_val, y_val = prepare_validation_data(read_one_folder)
         x_train_for_val, spec_train_for_val, y_train_for_val = prepare_validation_data(read_train)
         lenval = len(y_val)
@@ -225,7 +225,7 @@ if __name__ == '__main__':
             y_train_for_val = h5f['y_train_for_val']
 
     # pickle write
-    if True:
+    if False:
         x_val, spec_val, y_val = prepare_validation_data(read_one_folder)
         x_train_for_val, spec_train_for_val, y_train_for_val = prepare_validation_data(read_train)
         d = {'x_train_for_val': x_train_for_val,
