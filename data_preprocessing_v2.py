@@ -184,7 +184,7 @@ def prepare_validation_data(func):
 
 framerate = 2000
 window = framerate * 5
-target_num = int(1e5)
+target_num = int(1e6)
 nfft = 256
 h5fn = 'cincsetx.h5'
 

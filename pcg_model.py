@@ -257,7 +257,7 @@ class PCG(tf.keras.Model):
         return self.fc(x)
 
 
-class PCGONLY(tf.keras.Model):
+class PCGONLY(tf.keras.Sequential):
     def __init__(self, dim=1, k=1):
         super(PCGONLY, self).__init__()
         assert dim in [1, 2]
