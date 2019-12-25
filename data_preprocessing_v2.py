@@ -106,12 +106,12 @@ def prepare_train_data():
     try:
         h5f = h5py.File(h5fn, 'w-')
         x_set = h5f.create_dataset("x", shape=(target_num, window, 1),
-                                   maxshape=(None, window, 1), chunks=(128, window, 1))
+                                   maxshape=(None, window, 1), chunks=(32, window, 1))
         spec_set = h5f.create_dataset("spectrogram", shape=(target_num, nfft // 2, nfft // 2, 1),
                                       maxshape=(None, nfft // 2, nfft // 2, 1),
-                                      chunks=(128, nfft // 2, nfft // 2, 1))
-        label_set1d = h5f.create_dataset("label1d", shape=(target_num,), maxshape=(None,), chunks=(128,))
-        label_set2d = h5f.create_dataset("label2d", shape=(target_num, 2), maxshape=(None, 2), chunks=(128, 2))
+                                      chunks=(32, nfft // 2, nfft // 2, 1))
+        label_set1d = h5f.create_dataset("label1d", shape=(target_num,), maxshape=(None,), chunks=(32,))
+        label_set2d = h5f.create_dataset("label2d", shape=(target_num, 2), maxshape=(None, 2), chunks=(32, 2))
         i0 = 0
     except:
         h5f = h5py.File(h5fn, 'a')
@@ -184,9 +184,9 @@ def prepare_validation_data(func):
 
 framerate = 2000
 window = framerate * 5
-target_num = int(1e6-1e4)
+target_num = int(1e5)
 nfft = 256
-h5fn = 'cincset.h5'
+h5fn = 'cincsetx.h5'
 
 if __name__ == '__main__':
     prepare_train_data()
@@ -195,24 +195,24 @@ if __name__ == '__main__':
     以下 for val
     """
     # h5py write
-    if True:
+    if False:
         x_val, spec_val, y_val = prepare_validation_data(read_one_folder)
-        x_train_for_val, spec_train_for_val, y_train_for_val = prepare_validation_data(read_train)
+        # x_train_for_val, spec_train_for_val, y_train_for_val = prepare_validation_data(read_train)
         lenval = len(y_val)
-        lentrain = len(y_train_for_val)
+        # lentrain = len(y_train_for_val)
         with h5py.File('val.h5', 'w') as h5f:
             x_val_set = h5f.create_dataset("x_val", shape=(lenval,))
             spec_val_set = h5f.create_dataset("spec_val", shape=(lenval,))
             y_val_set = h5f.create_dataset("y_val", shape=(lenval,))
-            x_train_for_val_set = h5f.create_dataset("x_train_for_val", shape=(lentrain,))
-            spec_train_for_val_set = h5f.create_dataset("spec_train_for_val", shape=(lentrain,))
-            y_train_for_val_set = h5f.create_dataset("y_train_for_val", shape=(lentrain,))
-            x_val_set[:] = x_val
+            # x_train_for_val_set = h5f.create_dataset("x_train_for_val", shape=(lentrain,))
+            # spec_train_for_val_set = h5f.create_dataset("spec_train_for_val", shape=(lentrain,))
+            # y_train_for_val_set = h5f.create_dataset("y_train_for_val", shape=(lentrain,))
+            x_val_set[:lenval] = x_val
             spec_val_set[:] = spec_val
             y_val_set[:] = y_val
-            x_train_for_val_set[:] = x_train_for_val
-            spec_train_for_val_set[:] = spec_train_for_val
-            y_train_for_val_set[:] = y_train_for_val
+            # x_train_for_val_set[:] = x_train_for_val
+            # spec_train_for_val_set[:] = spec_train_for_val
+            # y_train_for_val_set[:] = y_train_for_val
 
     # h5py read
     if False:

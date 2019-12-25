@@ -19,6 +19,7 @@ from matplotlib import pyplot as plt
 
 import tensorflow as tf
 import tensorflow.keras.layers as layers
+
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 
@@ -237,16 +238,22 @@ class InceptionResnetV2(tf.keras.layers.Layer):
 
 
 class PCG(tf.keras.Model):
-    def __init__(self, k=1):
+    def __init__(self, k=1, mode='add'):
         super(PCG, self).__init__()
         self.InceptionResnetV2D1 = InceptionResnetV2(dim=1, k=k)
         self.InceptionResnetV2D2 = InceptionResnetV2(dim=2, k=k)
+        self.fc0 = tf.keras.layers.Dense(units=24, activation='relu')
         self.fc = tf.keras.layers.Dense(units=1, activation=tf.keras.activations.sigmoid)
+        self.mode = mode
 
     def call(self, inputs, training=None, **kwargs):
         x1 = self.InceptionResnetV2D1(inputs[0])
         x2 = self.InceptionResnetV2D2(inputs[1])
-        x = layers.add([x1, x2])
+        if self.mode == 'add':
+            x = layers.add([x1, x2])
+        else:  # self.mode =='concat':
+            x = tf.concat(values=[x1, x2], axis=-1)
+        x = self.fc0(x)
         return self.fc(x)
 
 
@@ -255,16 +262,20 @@ class PCGONLY(tf.keras.Model):
         super(PCGONLY, self).__init__()
         assert dim in [1, 2]
         self.InceptionResnetV2 = InceptionResnetV2(dim=dim, k=k)
+        self.fc0 = tf.keras.layers.Dense(units=24, activation='relu')
         self.fc = tf.keras.layers.Dense(units=1, activation=tf.keras.activations.sigmoid)
 
     def call(self, inputs, training=None, **kwargs):
         x = self.InceptionResnetV2(inputs)
+        x = self.fc0(x)
         return self.fc(x)
 
 
 def creat_pcg_model(dim=1, k=1):
-    assert dim in [1, 2, 3]  # 一定只有这三种情况，不能改
-    assert k in range(1, 10)  # 不想模型太大或者太小，一定要增加模型规模，可改大
+    assert dim in [1, 2, 3]  # 一定只有这3种情况，不能改
+    assert k in range(1, 10)  # 不想模型太大或者太小，若一定要增加模型规模，可改大
     if dim in [1, 2]:
         return PCGONLY(dim=dim, k=k)
-    return PCG(k=k)
+    # mode = 'add'
+    mode = 'concat'
+    return PCG(k=k, mode=mode)

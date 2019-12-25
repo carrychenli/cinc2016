@@ -32,36 +32,49 @@ import pickle
 from datetime import datetime
 
 
-def generate_train_dataset(x, y):
-    i = 0
-    while i < y.shape[0] * 0.9:
-        data = (x[i], y[i])
+def generate_dataset(x, y, mode='train', is3d=False):
+    if mode == 'train':
+        i = 0
+        ed = int(y.shape[0] * 0.9)
+    else:
+        i = int(y.shape[0] * 0.9)
+        ed = y.shape[0]
+    while i < ed:
+        data = ((x[0][i], x[1][i]), y[i]) if is3d else (x[i], y[i])
         i += 1
         yield data
 
 
-def generate_val_dataset(x, y):
-    i = int(y.shape[0] * 0.9)
-    while i < y.shape[0]:
-        data = (x[i], y[i])
-        i += 1
-        yield data
-
-
-def generate_train_dataset_3D(x0, x1, y):
-    i = 0
-    while i < y.shape[0] * 0.9:
-        data = ((x0[i], x1[i]), y[i])
-        i += 1
-        yield data
-
-
-def generate_val_dataset_3D(x0, x1, y):
-    i = int(y.shape[0] * 0.9)
-    while i < y.shape[0]:
-        data = ((x0[i], x1[i]), y[i])
-        i += 1
-        yield data
+# def generate_train_dataset(x, y):
+#     i = 0
+#     while i < y.shape[0] * 0.9:
+#         data = (x[i], y[i])
+#         i += 1
+#         yield data
+#
+#
+# def generate_val_dataset(x, y):
+#     i = int(y.shape[0] * 0.9)
+#     while i < y.shape[0]:
+#         data = (x[i], y[i])
+#         i += 1
+#         yield data
+#
+#
+# def generate_train_dataset_3D(x0, x1, y):
+#     i = 0
+#     while i < y.shape[0] * 0.9:
+#         data = ((x0[i], x1[i]), y[i])
+#         i += 1
+#         yield data
+#
+#
+# def generate_val_dataset_3D(x0, x1, y):
+#     i = int(y.shape[0] * 0.9)
+#     while i < y.shape[0]:
+#         data = ((x0[i], x1[i]), y[i])
+#         i += 1
+#         yield data
 
 
 def train_model_h5py_generate(dim=1, x=None, y=None):
@@ -77,25 +90,35 @@ def train_model_h5py_generate(dim=1, x=None, y=None):
     model = creat_pcg_model(dim, k[dim - 1])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
 
-    if dim in [1, 2]:
-        train_set = tf.data.Dataset.from_generator(generator=generate_train_dataset, args=[x, y],
-                                                   output_types=output_types[dim - 1],
-                                                   output_shapes=output_shapes[dim - 1])
-        val_set = tf.data.Dataset.from_generator(generator=generate_val_dataset, args=[x, y],
-                                                 output_types=output_types[dim - 1],
-                                                 output_shapes=output_shapes[dim - 1])
-    else:
-        train_set = tf.data.Dataset.from_generator(generator=generate_train_dataset_3D, args=[x[0], x[1], y],
-                                                   output_types=output_types[dim - 1],
-                                                   output_shapes=output_shapes[dim - 1])
-        val_set = tf.data.Dataset.from_generator(generator=generate_val_dataset_3D, args=[x[0], x[1], y],
-                                                 output_types=output_types[dim - 1],
-                                                 output_shapes=output_shapes[dim - 1])
+    print('position 1')
+    # g_train_fn = generate_train_dataset if dim in [1, 2] else generate_train_dataset_3D
+    # g_val_fn = generate_val_dataset if dim in [1, 2] else generate_val_dataset_3D
+    # args = [x, y] if dim in [1, 2] else [x[0], x[1], y]
+    # train_set = tf.data.Dataset.from_generator(generator=g_train_fn, args=args,
+    #                                            output_types=output_types[dim - 1],
+    #                                            output_shapes=output_shapes[dim - 1])
+    # print('position 2')  # 这里还是会内存占用而卡机
+    # val_set = tf.data.Dataset.from_generator(generator=g_val_fn, args=args,
+    #                                          output_types=output_types[dim - 1],
+    #                                          output_shapes=output_shapes[dim - 1])
 
-    train_set = train_set.batch(batch[dim - 1])
-    val_set = val_set.batch(batch[dim - 1])
+    args_train = [x, y, 'train'] if dim != 3 else [x, y, 'train', True]
+    args_val = [x, y, 'val'] if dim != 3 else [x, y, 'val', True]
+    train_set = tf.data.Dataset.from_generator(generator=generate_dataset, args=args_train,
+                                               output_types=output_types[dim - 1],
+                                               output_shapes=output_shapes[dim - 1])
+    print('position 2')  # 这里还是会内存占用而卡机
+    val_set = tf.data.Dataset.from_generator(generator=generate_dataset, args=args_val,
+                                             output_types=output_types[dim - 1],
+                                             output_shapes=output_shapes[dim - 1])
 
-    model.fit(train_set, epochs=1, shuffle=False, verbose=2, validation_data=val_set,
+    print('position 3')
+    train_set = train_set.batch(batch[dim - 1]).repeat()
+    print('position 4')
+    val_set = val_set.batch(batch[dim - 1]).repeat()
+    print('position 5')
+
+    model.fit(train_set, epochs=epochs[dim - 1], shuffle=False, verbose=1, validation_data=val_set,
               callbacks=[tsbd_callback, ckpt_callback])  # validation_data=val_set,
     model.summary()
     # model.save("logs\\model" + str(dim) + "D.h5", save_format='tf')
@@ -129,23 +152,22 @@ def train_model_h5py(dim=1, x=None, y=None):
     log_dir = "logs\\model" + str(dim) + "D\\tsbd\\" + datetime.now().strftime("%Y%m%d-%H%M%S")
     tsbd_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     # 在文件名中包含 epoch (使用 `str.format`)
-    checkpoint_path = "logs\\model" + str(dim) + "D\\ckpt\\" + "cp-{epoch:04d}.ckpt"
+    ckpt_path = "logs\\model" + str(dim) + "D\\ckpt\\" + "cp.ckpt"
     # 创建一个回调，每 5 个 epochs 保存模型的权重
     ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=checkpoint_path, verbose=1, save_weights_only=True, period=1)
+        filepath=ckpt_path, verbose=1, save_weights_only=True, period=1)
     model = creat_pcg_model(dim, k[dim - 1])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     bg, ed = 0, 1280
     for i in range(epochs[dim - 1]):
         while ed < y.shape[0]:
-            if dim in [1, 2]:
-                model.fit(x=x[bg:ed], y=y[bg:ed], batch_size=batch[dim - 1], epochs=1,
-                          shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
-            else:
-                model.fit(x=(x[0][bg:ed], x[1][bg:ed]), y=y[bg:ed], batch_size=batch[dim - 1], epochs=1,
-                          shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
+            xi = x[bg:ed] if dim in [1, 2] else (x[0][bg:ed], x[1][bg:ed])
+            yi = y[bg:ed]
+            model.fit(x=xi, y=yi, batch_size=batch[dim - 1], epochs=1,
+                      shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
             bg = ed
             ed += 1280
+            print("model%dD. Epoch:%d/%d, batch: %d/%d" % (dim, i + 1, epochs[dim - 1], ed / 1280, y.shape[0] // 1280))
     model.summary()
     # model.save("logs\\model" + str(dim) + "D.h5", save_format='tf')
     return None
@@ -201,20 +223,20 @@ output_types = [(tf.float32, tf.int64),
 output_shapes = [((10000, 1), ()),
                  ((128, 128, 1), ()),
                  (((10000, 1), (128, 128, 1)), ())]
-epochs = np.array([1, 1, 1]) * 5
+epochs = np.array([1, 1, 1]) * 2
 batch = [32, 32, 32]
-k = np.array([1, 1, 1]) * 1
+k = np.array([1, 1, 1]) * 8
 
 # train h5py
 if __name__ == '__main__':
-    with h5py.File('cincset1.h5', 'r') as h5f:
+    with h5py.File('cincset.h5', 'r') as h5f:
         xs = h5f['x']
         specs = h5f['spectrogram']
         labels = h5f['label1d']  # labels = h5f['label2d']
         #
-        train_model_h5py_generate(dim=1, x=xs, y=labels)
-        train_model_h5py_generate(dim=2, x=specs, y=labels)
-        train_model_h5py_generate(dim=3, x=(xs, specs), y=labels)
+        train_model_h5py(dim=1, x=xs, y=labels)
+        train_model_h5py(dim=2, x=specs, y=labels)
+        train_model_h5py(dim=3, x=(xs, specs), y=labels)
 
 # train small
 if __name__ == '__main__A':
@@ -226,27 +248,28 @@ if __name__ == '__main__A':
         # print(np.sum(labels[:]))
         #
         train_model_small(dim=1, x=xs[:], y=labels[:])
-        # train_model_small(dim=2, x=specs[:], y=labels[:])
-        # train_model_small(dim=3, x=(xs[:], specs[:]), y=labels[:])
+        train_model_small(dim=2, x=specs[:], y=labels[:])
+        train_model_small(dim=3, x=(xs[:], specs[:]), y=labels[:])
 
 # evaluate
 if __name__ == '__main__':
-    # with open('val.pkl', 'rb') as f:
-    #     d = pickle.load(f)
-    #     x_train_for_val, spec_train_for_val, y_train_for_val, x_val, spec_val, y_val = \
-    #         d['x_train_for_val'], d['spec_train_for_val'], d['y_train_for_val'], \
-    #         d['x_val'], d['spec_val'], d['y_val']
-    #     eval_model(dim=1, x=x_val, y=y_val)
-    #     eval_model(dim=2, x=spec_val, y=y_val)
-    #     eval_model(dim=3, x=(x_val, spec_val), y=y_val)
+    with open('val.pkl', 'rb') as f:
+        d = pickle.load(f)
+        # x_train_for_val, spec_train_for_val, y_train_for_val = \
+        #     d['x_train_for_val'], d['spec_train_for_val'], d['y_train_for_val']
+        x_val, spec_val, y_val = d['x_val'], d['spec_val'], d['y_val']
 
-    with h5py.File('val.h5', 'r') as h5f:
-        x_val = h5f['x_val']
-        spec_val = h5f['spec_val']
-        y_val = h5f['y_val']
-        x_train_for_val = h5f['x_train_for_val']
-        spec_train_for_val = h5f['spec_train_for_val']
-        y_train_for_val = h5f['y_train_for_val']
         eval_model(dim=1, x=x_val, y=y_val)
         eval_model(dim=2, x=spec_val, y=y_val)
         eval_model(dim=3, x=(x_val, spec_val), y=y_val)
+
+    # with h5py.File('val.h5', 'r') as h5f:
+    #     x_val = h5f['x_val']
+    #     spec_val = h5f['spec_val']
+    #     y_val = h5f['y_val']
+    #     x_train_for_val = h5f['x_train_for_val']
+    #     spec_train_for_val = h5f['spec_train_for_val']
+    #     y_train_for_val = h5f['y_train_for_val']
+    #     eval_model(dim=1, x=x_val, y=y_val)
+    #     eval_model(dim=2, x=spec_val, y=y_val)
+    #     eval_model(dim=3, x=(x_val, spec_val), y=y_val)
