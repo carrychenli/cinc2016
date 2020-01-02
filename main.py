@@ -30,6 +30,7 @@ plt.rcParams['axes.unicode_minus'] = False
 import h5py
 import pickle
 from datetime import datetime
+from tensorflow.keras.utils import HDF5Matrix
 
 from common import eval_model_common, generate_dataset, generate_dataset_3D
 
@@ -87,7 +88,6 @@ def train_model_small(dim=1, x=None, y=None):
               shuffle=True, validation_split=0.1, verbose=2, callbacks=[tsbd_callback, ckpt_callback])
     model.summary()
     model.evaluate(x=x, y=y, batch_size=batch[dim - 1])
-    # model.save("logs\\model" + str(dim) + "D.h5", save_format='tf')
     return None
 
 
@@ -136,8 +136,23 @@ epochs = np.array([1, 1, 1]) * 2
 batch = [32, 32, 32]
 k = np.array([1, 1, 1]) * 8
 
-# train h5py
+# train HDF5Matrix
 if __name__ == '__main__':
+    fn = 'cincset1.h5'
+    xs = HDF5Matrix(fn, 'x')
+    specs = HDF5Matrix(fn, 'spectrogram')
+    labels = HDF5Matrix(fn, 'label1d')
+    print(xs.shape)
+    model = creat_pcg_model(1, k[1 - 1])
+    model.build(input_shape=(None, 10000, 1))
+    y = model.predict(xs[:])
+    print(y)
+    # train_model_small(dim=1, x=xs, y=labels)
+    # train_model_small(dim=1, x=xs, y=labels)
+    # train_model_small(dim=3, x=(xs, specs), y=labels)
+
+# train h5py
+if __name__ == '__main__A':
     with h5py.File('cincset1.h5', 'r') as h5f:
         xs = h5f['x']
         specs = h5f['spectrogram']
@@ -161,15 +176,15 @@ if __name__ == '__main__A':
         train_model_small(dim=3, x=(xs[:], specs[:]), y=labels[:])
 
 # evaluate
-if __name__ == '__main__':
+if __name__ == '__main__A':
     with open('val.pkl', 'rb') as f:
         d = pickle.load(f)
         # x, spec, y = \  # for train data
         #     d['x_train_for_val'], d['spec_train_for_val'], d['y_train_for_val']
         x, spec, y = d['x_val'], d['spec_val'], d['y_val']
         eval_model(dim=1, x=x, y=y)
-        # eval_model(dim=2, x=spec, y=y)
-        # eval_model(dim=3, x=(x, spec), y=y)
+        eval_model(dim=2, x=spec, y=y)
+        eval_model(dim=3, x=(x, spec), y=y)
 
     # with h5py.File('val.h5', 'r') as h5f:
     #     x_val = h5f['x_val']

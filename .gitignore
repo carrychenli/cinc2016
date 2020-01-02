@@ -133,6 +133,7 @@ dmypy.json
 *.zip
 *.png
 *.jpg
+*.txt
 
 
 sample2016/
@@ -140,3 +141,6 @@ sample2016b/
 training/
 validation/
 logs/
+logs_torch/
+logs_tape/
+

@@ -51,6 +51,7 @@ def train_eval_data(dim=1, x=None, y=None, x_val=None, y_val=None):
             # chose = [bg:ed]
             xi = x[bg:ed] if dim in [1, 2] else (x[0][bg:ed], x[1][bg:ed])
             yi = y[bg:ed]
+            yii = yi
             yi = tf.squeeze(yi)
             with tf.GradientTape() as tape:
                 logits = model(xi)
@@ -65,10 +66,20 @@ def train_eval_data(dim=1, x=None, y=None, x_val=None, y_val=None):
                     dim, epoch + 1, epochs[dim - 1], batch_id, y.shape[0] // batch[dim - 1]))
                 print(epoch, batch_id, 'loss:', float(loss), 'acc:', metric.result().numpy())
                 metric.reset_states()
+    print('train finish!')
+
     # eval
+    # model_name = "logs_tape\\model" + str(dim) + "D.h5"
+    # model.save(model_name)
+    # model = tf.keras.models.load_model(model_name)
+
     model_name = "logs_tape\\model" + str(dim) + "D.h5"
-    model.save(model_name)
-    model = tf.keras.models.load_model(model_name)
+    model.save_weights(model_name)
+    model = creat_pcg_model(dim, k[dim - 1])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.fit(xi, yii, epochs=1, batch_size=yii.shape[0], verbose=2)
+    model.load_weights(model_name)
+
     eval_model_common(model, dim, x_val, y_val)
     return model
 
@@ -79,13 +90,13 @@ output_types = [(tf.float32, tf.int64),
 output_shapes = [((10000, 1), ()),
                  ((128, 128, 1), ()),
                  (((10000, 1), (128, 128, 1)), ())]
-epochs = np.array([1, 1, 1]) * 2
+epochs = np.array([1, 1, 1]) * 3
 batch = [32, 32, 32]
 k = np.array([1, 1, 1]) * 8
 
 # train h5py
 if __name__ == '__main__':
-    with h5py.File('cincset1.h5', 'r') as h5f:
+    with h5py.File('cincsetx.h5', 'r') as h5f:
         xs = h5f['x']
         specs = h5f['spectrogram']
         labels = h5f['label1d']  # labels = h5f['label2d']
